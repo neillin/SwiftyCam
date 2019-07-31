@@ -367,8 +367,6 @@ import AVFoundation
 
     open override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        NotificationCenter.default.addObserver(self, selector: #selector(captureSessionDidStartRunning), name: .AVCaptureSessionDidStartRunning, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(captureSessionDidStopRunning),  name: .AVCaptureSessionDidStopRunning,  object: nil)
     }
 
 	// MARK: ViewDidAppear
@@ -377,42 +375,50 @@ import AVFoundation
 	override open func viewDidAppear(_ animated: Bool) {
 		super.viewDidAppear(animated)
 
-		// Subscribe to device rotation notifications
+        self.startSession();
+	}
+    
+    public func startSession() {
+        
+        NotificationCenter.default.addObserver(self, selector: #selector(captureSessionDidStartRunning), name: .AVCaptureSessionDidStartRunning, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(captureSessionDidStopRunning),  name: .AVCaptureSessionDidStopRunning,  object: nil)
 
-		if shouldUseDeviceOrientation {
-			orientation.start()
-		}
-
-		// Set background audio preference
-
-		setBackgroundAudioPreference()
-
-		sessionQueue.async {
-			switch self.setupResult {
-			case .success:
-				// Begin Session
-				self.session.startRunning()
-				self.isSessionRunning = self.session.isRunning
-
+        // Subscribe to device rotation notifications
+        
+        if shouldUseDeviceOrientation {
+            orientation.start()
+        }
+        
+        // Set background audio preference
+        
+        setBackgroundAudioPreference()
+        
+        sessionQueue.async {
+            switch self.setupResult {
+            case .success:
+                // Begin Session
+                self.session.startRunning()
+                self.isSessionRunning = self.session.isRunning
+                
                 // Preview layer video orientation can be set only after the connection is created
                 DispatchQueue.main.async {
                     self.previewLayer.videoPreviewLayer.connection?.videoOrientation = self.orientation.getPreviewLayerOrientation()
                 }
-
-			case .notAuthorized:
+                
+            case .notAuthorized:
                 if self.shouldPrompToAppSettings == true {
                     self.promptToAppSettings()
                 } else {
                     self.cameraDelegate?.swiftyCamNotAuthorized(self)
                 }
-			case .configurationFailed:
-				// Unknown Error
+            case .configurationFailed:
+                // Unknown Error
                 DispatchQueue.main.async {
                     self.cameraDelegate?.swiftyCamDidFailToConfigure(self)
                 }
-			}
-		}
-	}
+            }
+        }
+    }
 
 	// MARK: ViewDidDisappear
 
@@ -421,24 +427,29 @@ import AVFoundation
 
 	override open func viewDidDisappear(_ animated: Bool) {
 		super.viewDidDisappear(animated)
-
+        self.stopSession();
+	}
+    
+    public func stopSession() {
+        
         NotificationCenter.default.removeObserver(self)
         sessionRunning = false
+        
+        // If session is running, stop the session
+        if self.isSessionRunning == true {
+            self.session.stopRunning()
+            self.isSessionRunning = false
+        }
+        
+        //Disble flash if it is currently enabled
+        disableFlash()
+        
+        // Unsubscribe from device rotation notifications
+        if shouldUseDeviceOrientation {
+            orientation.stop()
+        }
 
-		// If session is running, stop the session
-		if self.isSessionRunning == true {
-			self.session.stopRunning()
-			self.isSessionRunning = false
-		}
-
-		//Disble flash if it is currently enabled
-		disableFlash()
-
-		// Unsubscribe from device rotation notifications
-		if shouldUseDeviceOrientation {
-			orientation.stop()
-		}
-	}
+    }
 
 	// MARK: Public Functions
 
