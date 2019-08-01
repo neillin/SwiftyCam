@@ -26,16 +26,16 @@ import AVFoundation
 
 	/// Enumeration for Camera Selection
 
-   @objc public enum CameraSelection: String {
+   @objc public enum CameraSelection: Int {
 
 		/// Camera on the back of the device
-		case rear = "rear"
+		case rear
 
 		/// Camera on the front of the device
-		case front = "front"
+		case front
 	}
     
-    public enum FlashMode{
+    @objc public enum FlashMode: Int{
         //Return the equivalent AVCaptureDevice.FlashMode
         var AVFlashMode: AVCaptureDevice.FlashMode {
             switch self {
@@ -413,7 +413,7 @@ import AVFoundation
         self.startSession();
 	}
     
-    public func startSession() {
+    @objc public func startSession() {
         
         NotificationCenter.default.addObserver(self, selector: #selector(captureSessionDidStartRunning), name: .AVCaptureSessionDidStartRunning, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(captureSessionDidStopRunning),  name: .AVCaptureSessionDidStopRunning,  object: nil)
@@ -465,7 +465,7 @@ import AVFoundation
         self.stopSession();
 	}
     
-    public func stopSession() {
+    @objc public func stopSession() {
         
         NotificationCenter.default.removeObserver(self)
         sessionRunning = false
@@ -512,6 +512,30 @@ import AVFoundation
 			capturePhotoAsyncronously(completionHandler: { (_) in })
 		}
 	}
+    
+    @objc public func getVideoCaptureResolution() -> CGSize {
+        // Define default resolution
+        var resolution = CGSize(width: 0, height: 0)
+        
+        // Get cur video device
+        let curVideoDevice = videoDevice;
+        
+        // Set if video portrait orientation
+        let portraitOrientation = orientation.deviceOrientation == .portrait || orientation.deviceOrientation == .portraitUpsideDown
+        
+        // Get video dimensions
+        if let formatDescription = curVideoDevice?.activeFormat.formatDescription {
+            let dimensions = CMVideoFormatDescriptionGetDimensions(formatDescription)
+            resolution = CGSize(width: CGFloat(dimensions.width), height: CGFloat(dimensions.height))
+            if (portraitOrientation) {
+                resolution = CGSize(width: resolution.height, height: resolution.width)
+            }
+        }
+        // Return resolution
+        return resolution
+    }
+    
+
 
 	/**
 
@@ -967,7 +991,7 @@ import AVFoundation
 
 	/// Enable or disable flash for photo
 
-@objc public func changeFlashSettings(device: AVCaptureDevice, mode: FlashMode) {
+    @objc public func changeFlashSettings(device: AVCaptureDevice, mode: FlashMode) {
 		do {
 			try device.lockForConfiguration()
 			device.flashMode = mode.AVFlashMode
