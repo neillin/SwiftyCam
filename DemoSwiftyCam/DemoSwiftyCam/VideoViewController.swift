@@ -63,7 +63,11 @@ class VideoViewController: UIViewController {
         // Allow background audio to continue to play
         do {
             if #available(iOS 10.0, *) {
+<<<<<<< HEAD
                 try AVAudioSession.sharedInstance().setCategory(AVAudioSession.Category.ambient, mode: .default, options: [])
+=======
+                try AVAudioSession.sharedInstance().setCategory(AVAudioSession.Category.playback, mode: .default, options: [])
+>>>>>>> a4ea96b... Merge branch 'master' of https://github.com/Awalz/SwiftyCam
             } else {
             }
         } catch let error as NSError {

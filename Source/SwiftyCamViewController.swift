@@ -1,4 +1,4 @@
-/*Copyright (c) 2016, Andrew Walz.
+ /*Copyright (c) 2016, Andrew Walz.
 
 Redistribution and use in source and binary forms, with or without modification,are permitted provided that the following conditions are met:
 
@@ -26,14 +26,36 @@ import AVFoundation
 
 	/// Enumeration for Camera Selection
 
-	@objc public enum CameraSelection: Int {
+   @objc public enum CameraSelection: String {
 
 		/// Camera on the back of the device
-		case rear
+		case rear = "rear"
 
 		/// Camera on the front of the device
-		case front
+		case front = "front"
 	}
+    
+    public enum FlashMode{
+        //Return the equivalent AVCaptureDevice.FlashMode
+        var AVFlashMode: AVCaptureDevice.FlashMode {
+            switch self {
+                case .on:
+                    return .on
+                case .off:
+                    return .off
+                case .auto:
+                    return .auto
+            }
+        }
+        //Flash mode is set to auto
+        case auto
+        
+        //Flash mode is set to on
+        case on
+        
+        //Flash mode is set to off
+        case off
+    }
 
 	/// Enumeration for video quality of the capture session. Corresponds to a AVCaptureSessionPreset
 
@@ -104,8 +126,15 @@ import AVFoundation
 	public var disableAudio											 = false
 
 	/// Sets whether flash is enabled for photo and video capture
-
-	public var flashEnabled                      = false
+    @available(*, deprecated, message: "use flashMode .on or .off") //use flashMode
+    public var flashEnabled: Bool = false {
+        didSet{
+            self.flashMode = self.flashEnabled ? .on : .off
+        }
+    }
+    
+    // Flash Mode
+    public var flashMode:FlashMode               = .off
 
 	/// Sets whether Pinch to Zoom is enabled for the capture session
 
@@ -266,7 +295,9 @@ import AVFoundation
 		return allowAutoRotate
 	}
 
-	public var videoCodecType: AVVideoCodecType? = nil
+	/// Sets output video codec
+    
+    public var videoCodecType: AVVideoCodecType? = nil
 
 	// MARK: ViewDidLoad
 
@@ -317,8 +348,12 @@ import AVFoundation
     /// ViewDidLayoutSubviews() Implementation
     private func updatePreviewLayer(layer: AVCaptureConnection, orientation: AVCaptureVideoOrientation) {
 
-        layer.videoOrientation = orientation
-
+        if(shouldAutorotate){
+            layer.videoOrientation = orientation
+        } else {
+            layer.videoOrientation = .portrait
+        }
+        
         previewLayer.frame = self.view.bounds
 
     }
@@ -467,32 +502,12 @@ import AVFoundation
 			return
 		}
 
-
-		if device.hasFlash == true && flashEnabled == true /* TODO: Add Support for Retina Flash and add front flash */ {
-			changeFlashSettings(device: device, mode: .on)
+        if device.hasFlash == true && flashMode != .off /* TODO: Add Support for Retina Flash and add front flash */ {
+            changeFlashSettings(device: device, mode: flashMode)
 			capturePhotoAsyncronously(completionHandler: { (_) in })
-
-		} else if device.hasFlash == false && flashEnabled == true && currentCamera == .front {
-			flashView = UIView(frame: view.frame)
-			flashView?.alpha = 0.0
-			flashView?.backgroundColor = UIColor.white
-			previewLayer.addSubview(flashView!)
-
-			UIView.animate(withDuration: 0.1, delay: 0.0, options: .curveEaseInOut, animations: {
-				self.flashView?.alpha = 1.0
-
-			}, completion: { (_) in
-				self.capturePhotoAsyncronously(completionHandler: { (success) in
-					UIView.animate(withDuration: 0.1, delay: 0.0, options: .curveEaseInOut, animations: {
-						self.flashView?.alpha = 0.0
-					}, completion: { (_) in
-						self.flashView?.removeFromSuperview()
-					})
-				})
-			})
-		} else {
+        }else{
 			if device.isFlashActive == true {
-				changeFlashSettings(device: device, mode: .off)
+				changeFlashSettings(device: device, mode: flashMode)
 			}
 			capturePhotoAsyncronously(completionHandler: { (_) in })
 		}
@@ -516,11 +531,11 @@ import AVFoundation
 			return
 		}
 
-		if currentCamera == .rear && flashEnabled == true {
+		if currentCamera == .rear && flashMode == .on {
 			enableFlash()
 		}
 
-		if currentCamera == .front && flashEnabled == true {
+		if currentCamera == .front && flashMode == .on  {
 			flashView = UIView(frame: view.frame)
 			flashView?.backgroundColor = UIColor.white
 			flashView?.alpha = 0.85
@@ -580,7 +595,7 @@ import AVFoundation
 			movieFileOutput!.stopRecording()
 			disableFlash()
 
-			if currentCamera == .front && flashEnabled == true && flashView != nil {
+			if currentCamera == .front && flashMode == .on && flashView != nil {
 				UIView.animate(withDuration: 0.1, delay: 0.0, options: .curveEaseInOut, animations: {
 					self.flashView?.alpha = 0.0
 				}, completion: { (_) in
@@ -692,10 +707,14 @@ import AVFoundation
 	/// Configure image quality preset
 
 	fileprivate func configureVideoPreset() {
-		if session.canSetSessionPreset(AVCaptureSession.Preset(rawValue: videoInputPresetFromVideoQuality(quality: videoQuality))) {
-			session.sessionPreset = AVCaptureSession.Preset(rawValue: videoInputPresetFromVideoQuality(quality: videoQuality))
+		if currentCamera == .front {
+			session.sessionPreset = AVCaptureSession.Preset(rawValue: videoInputPresetFromVideoQuality(quality: .high))
 		} else {
-			session.sessionPreset = AVCaptureSession.Preset(rawValue: videoInputPresetFromVideoQuality(quality: .resolution640x480))
+			if session.canSetSessionPreset(AVCaptureSession.Preset(rawValue: videoInputPresetFromVideoQuality(quality: videoQuality))) {
+				session.sessionPreset = AVCaptureSession.Preset(rawValue: videoInputPresetFromVideoQuality(quality: videoQuality))
+			} else {
+				session.sessionPreset = AVCaptureSession.Preset(rawValue: videoInputPresetFromVideoQuality(quality: .high))
+			}
 		}
 	}
 
@@ -796,13 +815,13 @@ import AVFoundation
 				}
 
 				if #available(iOS 11.0, *) {
-					if let videoCodecType = videoCodecType {
-						if movieFileOutput.availableVideoCodecTypes.contains(videoCodecType) == true {
-							movieFileOutput.setOutputSettings([AVVideoCodecKey: videoCodecType], for: connection)
-						}
-					}
-				}
-
+                    if let videoCodecType = videoCodecType {
+                        if movieFileOutput.availableVideoCodecTypes.contains(videoCodecType) == true {
+                            // Use the H.264 codec to encode the video.
+                            movieFileOutput.setOutputSettings([AVVideoCodecKey: videoCodecType], for: connection)
+                        }
+                    }
+                }
 			}
 			self.movieFileOutput = movieFileOutput
 		}
@@ -820,69 +839,6 @@ import AVFoundation
 		}
 	}
 
-	/// Orientation management
-
-	// @objc public func subscribeToDeviceOrientationChangeNotifications() {
-	// 	self.deviceOrientation = UIDevice.current.orientation
-	// 	NotificationCenter.default.addObserver(self, selector: #selector(deviceDidRotate), name: NSNotification.Name.UIDeviceOrientationDidChange, object: nil)
-	// }
-
-	// @objc public func unsubscribeFromDeviceOrientationChangeNotifications() {
-	// 	NotificationCenter.default.removeObserver(self, name: NSNotification.Name.UIDeviceOrientationDidChange, object: nil)
-	// 	self.deviceOrientation = nil
-	// }
-
-	// @objc public func deviceDidRotate() {
-	// 	if !UIDevice.current.orientation.isFlat {
-	// 		self.deviceOrientation = UIDevice.current.orientation
-	// 	}
-	// }
-    
-  //   @objc public func getPreviewLayerOrientation() -> AVCaptureVideoOrientation {
-  //       // Depends on layout orientation, not device orientation
-  //       switch UIApplication.shared.statusBarOrientation {
-  //       case .portrait, .unknown:
-  //           return AVCaptureVideoOrientation.portrait
-  //       case .landscapeLeft:
-  //           return AVCaptureVideoOrientation.landscapeLeft
-  //       case .landscapeRight:
-  //           return AVCaptureVideoOrientation.landscapeRight
-  //       case .portraitUpsideDown:
-  //           return AVCaptureVideoOrientation.portraitUpsideDown
-  //       }
-  //   }
-
-	// @objc public func getVideoOrientation() -> AVCaptureVideoOrientation {
-	// 	guard shouldUseDeviceOrientation, let deviceOrientation = self.deviceOrientation else { return previewLayer!.videoPreviewLayer.connection.videoOrientation }
-
-	// 	switch deviceOrientation {
-	// 	case .landscapeLeft:
-	// 		// keep the same if using front camera
-	// 		return self.currentCamera == .rear ? .landscapeRight : .landscapeLeft;
-	// 	case .landscapeRight:
-	// 		// keep the same if using front camera
-	// 		return self.currentCamera == .rear ? .landscapeLeft : .landscapeRight;
-	// 	case .portraitUpsideDown:
-	// 		return .portraitUpsideDown
-	// 	default:
-	// 		return .portrait
-	// 	}
-	// }
-
-	// @objc public func getImageOrientation(forCamera: CameraSelection) -> UIImageOrientation {
-	// 	guard shouldUseDeviceOrientation, let deviceOrientation = self.deviceOrientation else { return forCamera == .rear ? .right : .leftMirrored }
-
-	// 	switch deviceOrientation {
-	// 	case .landscapeLeft:
-	// 		return forCamera == .rear ? .up : .downMirrored
-	// 	case .landscapeRight:
-	// 		return forCamera == .rear ? .down : .upMirrored
-	// 	case .portraitUpsideDown:
-	// 		return forCamera == .rear ? .left : .rightMirrored
-	// 	default:
-	// 		return forCamera == .rear ? .right : .leftMirrored
-	// 	}
-	// }
 
 	/**
 	Returns a UIImage from Image Data.
@@ -1011,10 +967,10 @@ import AVFoundation
 
 	/// Enable or disable flash for photo
 
-	@objc public func changeFlashSettings(device: AVCaptureDevice, mode: AVCaptureDevice.FlashMode) {
+@objc public func changeFlashSettings(device: AVCaptureDevice, mode: FlashMode) {
 		do {
 			try device.lockForConfiguration()
-			device.flashMode = mode
+			device.flashMode = mode.AVFlashMode
 			device.unlockForConfiguration()
 		} catch {
 			print("[SwiftyCam]: \(error)")
