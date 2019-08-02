@@ -200,6 +200,9 @@ import AVFoundation
     /// Video will be recorded to this folder
     public var outputFolder: String           = NSTemporaryDirectory()
     
+    /// file the captured picture or video should be saved to
+    public var outputFile: String?;
+    
     /// Public access to Pinch Gesture
     fileprivate(set) public var pinchGesture  : UIPinchGestureRecognizer!
 
@@ -589,9 +592,12 @@ import AVFoundation
 				movieFileOutputConnection?.videoOrientation = self.orientation.getVideoOrientation() ?? previewOrientation
 
 				// Start recording to a temporary file.
-				let outputFileName = UUID().uuidString
-				let outputFilePath = (self.outputFolder as NSString).appendingPathComponent((outputFileName as NSString).appendingPathExtension("mov")!)
-				movieFileOutput.startRecording(to: URL(fileURLWithPath: outputFilePath), recordingDelegate: self)
+                var outputFilePath:String? = self.outputFile;
+                if outputFilePath == nil {
+                    let outputFileName = UUID().uuidString
+                    outputFilePath = (self.outputFolder as NSString).appendingPathComponent((outputFileName as NSString).appendingPathExtension("mov")!)
+                }
+				movieFileOutput.startRecording(to: URL(fileURLWithPath: outputFilePath!), recordingDelegate: self)
 				self.isVideoRecording = true
 				DispatchQueue.main.async {
 					self.cameraDelegate?.swiftyCam(self, didBeginRecordingVideo: self.currentCamera)
